@@ -1,3 +1,4 @@
+
 // import React, { useEffect, useState } from "react";
 
 // // Map UI labels to backend keys
@@ -130,21 +131,38 @@
 //       // 1) Pre-check availability
 //       const check = await precheckAvailability();
 //       if (!check.ok) {
-//         alert("Sold out");
+//         alert("Seats are full for this session");
 //         setShowModal(false);
 //         return;
 //       }
 
-//       // 2) Create backend order
+//       // 2) Create backend order - FIXED: Now includes session parameter
+//       const backendSessionKey = SESSION_KEY[selectedSession.name]; // Get the backend session key
 //       const orderRes = await fetch(`${API_BASE_URL}/api/payment/create-order`, {
 //         method: "POST",
 //         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ amount: selectedSession.price }),
+//         body: JSON.stringify({ 
+//           amount: selectedSession.price,
+//           session: backendSessionKey  // ADDED: Include session parameter
+//         }),
 //       });
-//       if (!orderRes.ok) return alert("Failed to create payment order.");
+
+//       if (!orderRes.ok) {
+//         const errorData = await orderRes.json().catch(() => ({}));
+//         alert(errorData.error || "Failed to create payment order.");
+//         return;
+//       }
+
 //       const orderData = await orderRes.json();
-//       if (!orderData.id) return alert("Failed to create payment order. Try again later.");
-//       if (!window.Razorpay) return alert("Razorpay SDK not loaded.");
+//       if (!orderData.id) {
+//         alert("Failed to create payment order. Try again later.");
+//         return;
+//       }
+
+//       if (!window.Razorpay) {
+//         alert("Razorpay SDK not loaded.");
+//         return;
+//       }
 
 //       // 3) Open Razorpay
 //       const options = {
@@ -158,6 +176,7 @@
 //         prefill: { name: formData.name, email: formData.email, contact: formData.phone },
 //         theme: { color: "#EB0028" },
 //       };
+
 //       new window.Razorpay(options).open();
 //       setShowModal(false);
 //     } catch (err) {
@@ -398,57 +417,85 @@ const TicketPage = () => {
   };
 
   const precheckAvailability = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/payment/availability`);
-    if (!res.ok) throw new Error("Availability check failed");
-    const data = await res.json();
-    const key = getAvailabilityKey();
-    const available = key ? data[key] : 0;
-    return { ok: Number(available) > 0, snapshot: data };
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/payment/availability`);
+      if (!res.ok) throw new Error("Availability check failed");
+      const data = await res.json();
+      const key = getAvailabilityKey();
+      const available = key ? data[key] : 0;
+      
+      console.log("🔍 Availability check:", {
+        session: selectedSession?.name,
+        key,
+        available,
+        data
+      });
+      
+      return { ok: Number(available) > 0, snapshot: data };
+    } catch (error) {
+      console.error("Availability check error:", error);
+      return { ok: false, snapshot: null };
+    }
   };
 
   const initiatePayment = async () => {
     try {
       if (!selectedSession) return;
 
+      console.log("🎫 Starting payment process for:", selectedSession.name);
+
       // 1) Pre-check availability
       const check = await precheckAvailability();
       if (!check.ok) {
-        alert("Seats are full for this session");
+        alert(`🚫 All seats are sold out for the ${selectedSession.name}. Please try a different session.`);
         setShowModal(false);
         return;
       }
 
-      // 2) Create backend order - FIXED: Now includes session parameter
-      const backendSessionKey = SESSION_KEY[selectedSession.name]; // Get the backend session key
+      // 2) Create backend order - Includes session parameter
+      const backendSessionKey = SESSION_KEY[selectedSession.name];
+      console.log("🔄 Creating order with session:", backendSessionKey);
+      
       const orderRes = await fetch(`${API_BASE_URL}/api/payment/create-order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           amount: selectedSession.price,
-          session: backendSessionKey  // ADDED: Include session parameter
+          session: backendSessionKey
         }),
       });
 
       if (!orderRes.ok) {
         const errorData = await orderRes.json().catch(() => ({}));
-        alert(errorData.error || "Failed to create payment order.");
+        console.error("❌ Order creation failed:", errorData);
+        
+        // ENHANCED: Better error handling for seat limits
+        if (orderRes.status === 409 || errorData.error === "Seats are full") {
+          alert(`🚫 Sorry! All seats for the ${selectedSession.name} are now sold out. Please try a different session.`);
+        } else {
+          alert(errorData.error || errorData.message || "Failed to create payment order.");
+        }
+        setShowModal(false);
         return;
       }
 
       const orderData = await orderRes.json();
       if (!orderData.id) {
-        alert("Failed to create payment order. Try again later.");
+        alert("Failed to create payment order. Please try again.");
+        setShowModal(false);
         return;
       }
 
       if (!window.Razorpay) {
-        alert("Razorpay SDK not loaded.");
+        alert("Payment system not loaded. Please refresh the page and try again.");
         return;
       }
 
+      console.log("✅ Order created successfully, opening Razorpay...");
+
       // 3) Open Razorpay
       const options = {
-        key: "rzp_test_KzB4idWWnf33y2", // test key for local
+        key: "rzp_test_KzB4idWWnf33y2",
         amount: selectedSession.price * 100,
         currency: "INR",
         name: "TEDx DYP Akurdi",
@@ -457,19 +504,28 @@ const TicketPage = () => {
         handler: (response) => verifyPayment(response),
         prefill: { name: formData.name, email: formData.email, contact: formData.phone },
         theme: { color: "#EB0028" },
+        modal: {
+          ondismiss: function() {
+            console.log("Payment modal closed by user");
+            setShowModal(false);
+          }
+        }
       };
 
       new window.Razorpay(options).open();
       setShowModal(false);
     } catch (err) {
-      console.error(err);
-      alert("Error initiating payment.");
+      console.error("Payment initiation error:", err);
+      alert("Error starting payment process. Please try again.");
+      setShowModal(false);
     }
   };
 
   const verifyPayment = async (response) => {
     try {
-      const backendSessionKey = SESSION_KEY[selectedSession.name]; // 'morning' | 'fullDay' | 'evening'
+      console.log("💳 Verifying payment...");
+      const backendSessionKey = SESSION_KEY[selectedSession.name];
+      
       const res = await fetch(`${API_BASE_URL}/api/payment/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -489,13 +545,15 @@ const TicketPage = () => {
 
       const data = await res.json();
       if (data.success) {
-        window.location.href = `/success?name=${encodeURIComponent(formData.name)}&email=${encodeURIComponent(formData.email)}&phone=${encodeURIComponent(formData.phone)}&amount=${selectedSession.price}&ticketId=${data.ticketId}`;
+        console.log("✅ Payment verified successfully:", data.ticketId);
+        window.location.href = `/success?name=${encodeURIComponent(formData.name)}&email=${encodeURIComponent(formData.email)}&phone=${encodeURIComponent(formData.phone)}&amount=${selectedSession.price}&ticketId=${data.ticketId}&razorpayPaymentId=${response.razorpay_payment_id}`;
       } else {
-        alert(data.message || "Payment verification failed.");
+        console.error("❌ Payment verification failed:", data);
+        alert(data.message || "Payment verification failed. Please contact support.");
       }
     } catch (e) {
-      console.error(e);
-      alert("Error verifying payment.");
+      console.error("Payment verification error:", e);
+      alert("Error processing payment. Please contact support with your payment ID.");
     }
   };
 
@@ -581,3 +639,4 @@ const TicketPage = () => {
 };
 
 export default TicketPage;
+
