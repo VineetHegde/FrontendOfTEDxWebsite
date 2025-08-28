@@ -12,7 +12,7 @@ const LOGO_ICON_PRIMARY =
 const LOGO_ICON_FALLBACK =
   "https://seeklogo.com/images/T/tedx-logo-5056CD3A71-seeklogo.com.png";
 
-const API_BASE_URL = "https://backend-of-tedx-website-on-render.onrender.com";
+const API_BASE_URL = "https://backendoftedxdypakurdi.onrender.com";
 const ENABLE_EMAIL_SEND = true;
 
 const SuccessPage = () => {
