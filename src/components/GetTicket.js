@@ -662,7 +662,7 @@ const SESSIONS = [
 ];
 
 // ✅ FIXED: Corrected API key with test mode fallback
-const RAZORPAY_KEY_ID = "rzp_live_RAdCru2UL8q5u1";
+const RAZORPAY_KEY_ID = "rzp_live_RAdCru2UL8q5u1"; //Vi
 // const RAZORPAY_KEY_ID = "rzp_test_YOUR_TEST_KEY"; // Uncomment for testing account issues
 
 const InfoBox = ({ title, value }) => (
