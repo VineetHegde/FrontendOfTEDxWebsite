@@ -846,7 +846,7 @@ const TicketPage = () => {
 
       // Open Razorpay
       const options = {
-        key: "rzp_test_KzB4idWWnf33y2",
+        key: "rzp_live_RBQ7LfMbHlJ2zp",
         amount: selectedSession.price * 100,
         currency: "INR",
         name: "TEDx DYP Akurdi",
